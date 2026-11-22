@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Type Orbit — a letter atlas</title>
+<meta name="description" content="Type a phrase and watch it become a readable constellation: every letter a star, every word a chart. An observatory for words." />
+<meta name="theme-color" content="#07070b" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <div class="frame chrome" aria-hidden="true"></div>
+
+  <header class="chrome">
+    <div class="brand">
+      <h1>Type <em>Orbit</em></h1>
+      <p class="kicker">a letter atlas</p>
+    </div>
+
+    <div class="mode" role="group" aria-label="View">
+      <button id="mode-chart" type="button" aria-pressed="true">Chart</button>
+      <button id="mode-plate" type="button" aria-pressed="false">Plate</button>
+    </div>
+  </header>
+
+  <dl class="readout chrome" aria-label="Chart readings">
+    <div><dt>Letters</dt><dd id="stat-letters">00</dd></div>
+    <div><dt>Words</dt><dd id="stat-words">00</dd></div>
+    <div><dt>Sector</dt><dd id="stat-sector">—</dd></div>
+    <div><dt>Seed</dt><dd id="stat-seed">—</dd></div>
+  </dl>
+
+  <p class="caption chrome">type to chart &middot; space starts a word &middot; backspace retracts &middot; enter clears</p>
+
+  <footer class="chrome">
+    <div class="controls">
+      <div class="palettes" id="palettes" role="group" aria-label="Palette">
+        <span class="label">Palette</span>
+      </div>
+      <div class="tints" role="group" aria-label="Custom colours">
+        <span class="label">Custom</span>
+        <label class="tint" title="Background colour">
+          <input id="pick-bg" type="color" value="#07070b" aria-label="Background colour" />
+          <span>bg</span>
+        </label>
+        <label class="tint" title="Text colour">
+          <input id="pick-ink" type="color" value="#e9e4d8" aria-label="Text colour" />
+          <span>text</span>
+        </label>
+      </div>
+      <div class="filter">
+        <label class="label" for="orbits">Orbits</label>
+        <input id="orbits" class="num" type="number" min="0" step="1" value="1" inputmode="numeric" aria-label="Number of orbits" />
+      </div>
+      <div class="filter">
+        <label class="label" for="filter">Filter</label>
+        <select id="filter">
+          <option value="none">None</option>
+          <option value="mono">Black &amp; white</option>
+          <option value="noir">Noir</option>
+          <option value="sepia">Sepia</option>
+          <option value="invert">Invert</option>
+          <option value="cyan">Cyanotype</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="new-sky" type="button">New sky</button>
+      <button id="save" type="button">Save png</button>
+    </div>
+  </footer>
+
+  <p class="plate-hint">esc — return to chart</p>
+
+  <input id="typer" class="typer" type="text" aria-label="Type to chart a constellation" autocomplete="off" autocapitalize="off" spellcheck="false" />
+  <script src="orbit.js"></script>
+</body>
+</html>
