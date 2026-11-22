@@ -82,6 +82,31 @@ header > * { pointer-events: auto; }
   opacity: .42;
 }
 
+
+.credit {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-decoration: none;
+  opacity: .42;
+  border-bottom: 1px solid transparent;
+  transition: opacity .2s ease, border-color .2s ease;
+}
+
+.credit:hover,
+.credit:focus-visible {
+  opacity: 1;
+  border-color: currentColor;
+}
+
+.credit:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .mode {
   display: flex;
   gap: 2px;
