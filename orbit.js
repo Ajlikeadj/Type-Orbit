@@ -1,6 +1,6 @@
 /* Type Orbit — a letter atlas.
-   The phrase is set as readable, wrapped lines. Every glyph is a star with its
-   own orbit and moon; letters of one word are joined by a dashed constellation line. */
+   The phrase is set as readable, wrapped lines. Every glyph is a star; orbit
+   rings tilt at random angles and the dashed lines join the letters of a word. */
 
 (() => {
   "use strict";
@@ -8,15 +8,19 @@
   const TAU = Math.PI * 2;
   const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
   const SERIF = '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif';
+
   const MAX_CHARS = 110;
+  const MAX_CHARS_NARROW = 70;
+  const MAX_ORBITS = 200;
+  const ORBIT_ROLL = 13; // New sky picks an orbit count in [0, ORBIT_ROLL)
 
   const PALETTES = {
     nebula: { name: "Nebula", bg: "#07070b", bg2: "#0d0a18", ink: "#e9e4d8", accent: "#a78bfa", haze: "#3c2a66", core: "#ffffff" },
-    solar:  { name: "Solar",  bg: "#0a0705", bg2: "#171009", ink: "#f2e8d8", accent: "#f0a45c", haze: "#5c3517", core: "#fff7e8" },
-    tide:   { name: "Tide",   bg: "#04090b", bg2: "#071619", ink: "#dfeae8", accent: "#5fd3c4", haze: "#0f4a4c", core: "#eafffb" },
-    bone:   { name: "Bone",   bg: "#efe9dd", bg2: "#e1d9c9", ink: "#1b1815", accent: "#a4392f", haze: "#cbbfa7", core: "#3a2a23", light: true },
+    solar: { name: "Solar", bg: "#0a0705", bg2: "#171009", ink: "#f2e8d8", accent: "#f0a45c", haze: "#5c3517", core: "#fff7e8" },
+    tide: { name: "Tide", bg: "#04090b", bg2: "#071619", ink: "#dfeae8", accent: "#5fd3c4", haze: "#0f4a4c", core: "#eafffb" },
+    bone: { name: "Bone", bg: "#efe9dd", bg2: "#e1d9c9", ink: "#1b1815", accent: "#a4392f", haze: "#cbbfa7", core: "#3a2a23", light: true },
     signal: { name: "Signal", bg: "#060a05", bg2: "#0c1407", ink: "#e9edd8", accent: "#c6f24e", haze: "#3a5418", core: "#f6ffd8" },
-    ember:  { name: "Ember",  bg: "#0a0505", bg2: "#190a07", ink: "#f2e2d8", accent: "#ff6b45", haze: "#5c2012", core: "#ffeadf" },
+    ember: { name: "Ember", bg: "#0a0505", bg2: "#190a07", ink: "#f2e2d8", accent: "#ff6b45", haze: "#5c2012", core: "#ffeadf" },
   };
 
   const FILTERS = {
@@ -46,6 +50,20 @@
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+  const scaleFor = (w, h) => clamp(Math.min(w, h) / 860, 0.62, 1.7);
+
+  const fontFor = (size) => `400 ${size}px ${SERIF}`;
+
+  const randomOrbitCount = () => Math.floor(Math.random() * ORBIT_ROLL);
+
+  /* 0 → just born, 1 → fully drawn. */
+  function ageOf(idx, t, duration) {
+    const born = state.births[idx];
+    return born == null ? 1 : clamp((t - born) / duration, 0, 1);
+  }
+
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+
   function hexA(hex, a) {
     const n = parseInt(hex.slice(1), 16);
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
@@ -71,29 +89,28 @@
 
   function luminance(hex) {
     const { r, g, b } = hexToRgb(hex);
-    const f = (v) => {
+    const channel = (v) => {
       v /= 255;
       return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
     };
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
   }
 
   function customPalette(base, bg, ink) {
     const light = luminance(bg) > 0.45;
-    const accent = mixHex(base.accent, ink, 0.45);
     return {
       name: "Custom",
       bg,
       bg2: mixHex(bg, ink, 0.09),
       ink,
-      accent,
+      accent: mixHex(base.accent, ink, 0.45),
       haze: mixHex(bg, ink, light ? 0.18 : 0.24),
       core: ink,
       light,
     };
   }
 
-  const palCache = { key: "", value: null };
+  let palCache = { key: "", value: null };
 
   function currentPal() {
     if (!state.custom) return PALETTES[state.paletteKey];
@@ -137,6 +154,7 @@
   const canvas = document.getElementById("sky");
   const ctx = canvas.getContext("2d");
   const typer = document.getElementById("typer");
+
   const els = {
     letters: document.getElementById("stat-letters"),
     words: document.getElementById("stat-words"),
@@ -179,12 +197,11 @@
       r: 0.36 + rng() * 0.34,
       a: 0.24 + rng() * 0.26,
     }));
-    bgKey = "";
   }
 
   function ensureBackground(w, h) {
     const pal = currentPal();
-    const s = clamp(Math.min(w, h) / 860, 0.62, 1.7);
+    const s = scaleFor(w, h);
     const customKey = state.custom ? `${state.custom.bg}${state.custom.ink}` : "";
     const key = `${Math.round(w)}x${Math.round(h)}|${state.seed}|${state.paletteKey}|${customKey}|${dpr}`;
     if (key === bgKey) return;
@@ -239,73 +256,49 @@
 
   let layoutCache = { key: "", value: null };
 
-  function buildLayout(text, w, h, seed) {
-    const key = `${text}\u0000${Math.round(w)}\u0000${Math.round(h)}\u0000${seed}`;
-    if (layoutCache.key === key) return layoutCache.value;
-    layoutCache.key = key;
-
-    // words, with their indices in the original string
+  /* Words as arrays of { ch, i }, where i is the index in the full string. */
+  function tokenize(text) {
     const tokens = [];
-    let bucket = [];
+    let word = [];
     for (let i = 0; i < text.length; i++) {
       const ch = text[i];
-      if (ch === " ") {
-        if (bucket.length) {
-          tokens.push(bucket);
-          bucket = [];
-        }
-      } else {
-        bucket.push({ ch, i });
+      if (ch !== " ") {
+        word.push({ ch, i });
+      } else if (word.length) {
+        tokens.push(word);
+        word = [];
       }
     }
-    if (bucket.length) tokens.push(bucket);
-    if (!tokens.length) {
-      layoutCache.value = null;
-      return null;
-    }
+    if (word.length) tokens.push(word);
+    return tokens;
+  }
 
-    const cx = w * 0.5;
-    const cy = h * 0.46;
-    const availW = Math.min(w * 0.82, 1060);
-    const availH = h * 0.56;
+  /* Greedy wrap at the current ctx font. */
+  function wrapTokens(tokens, availW) {
+    const spaceW = ctx.measureText(" ").width;
+    const lines = [];
+    let line = [];
+    let lineW = 0;
 
-    let best = null;
-    const start = Math.min(availW * 0.24, availH * 0.44, 158);
-
-    for (let size = start; size >= 12; size -= 1) {
-      ctx.font = `400 ${size}px ${SERIF}`;
-      const spaceW = ctx.measureText(" ").width;
-      const lines = [];
-      let line = [];
-      let lineW = 0;
-
-      for (const token of tokens) {
-        const tokenW = ctx.measureText(token.map((t) => t.ch).join("")).width;
-        if (line.length && lineW + spaceW + tokenW > availW) {
-          lines.push(line);
-          line = [];
-          lineW = 0;
-        }
-        if (line.length) {
-          line.push({ ch: " ", i: -1 });
-          lineW += spaceW;
-        }
-        line.push(...token);
-        lineW += tokenW;
+    for (const token of tokens) {
+      const tokenW = ctx.measureText(token.map((t) => t.ch).join("")).width;
+      if (line.length && lineW + spaceW + tokenW > availW) {
+        lines.push(line);
+        line = [];
+        lineW = 0;
       }
-      lines.push(line);
-
-      const lineH = size * 1.62;
-      const maxLineW = Math.max(...lines.map((l) => ctx.measureText(l.map((c) => c.ch).join("")).width));
-      best = { size, lines, lineH };
-      if (lines.length * lineH <= availH && maxLineW <= availW) break;
+      if (line.length) {
+        line.push({ ch: " ", i: -1 });
+        lineW += spaceW;
+      }
+      line.push(...token);
+      lineW += tokenW;
     }
+    lines.push(line);
+    return lines;
+  }
 
-    const { size, lines, lineH } = best;
-    ctx.font = `400 ${size}px ${SERIF}`;
-    const totalH = lines.length * lineH;
-    const firstCenter = cy - totalH / 2 + lineH / 2;
-
+  function placeLines(lines, cx, firstCenter, lineH, size, seed) {
     const letters = [];
     const lineInfo = [];
 
@@ -347,48 +340,54 @@
       lineInfo.push({ x0, width, y: baseY });
     });
 
+    return { letters, lineInfo };
+  }
+
+  /* Largest type that fits the frame, then the placed glyphs. */
+  function buildLayout(text, w, h, seed) {
+    const key = `${text}\u0000${Math.round(w)}\u0000${Math.round(h)}\u0000${seed}`;
+    if (layoutCache.key === key) return layoutCache.value;
+    layoutCache.key = key;
+
+    const tokens = tokenize(text);
+    if (!tokens.length) {
+      layoutCache.value = null;
+      return null;
+    }
+
+    const cx = w * 0.5;
+    const cy = h * 0.46;
+    const availW = Math.min(w * 0.82, 1060);
+    const availH = h * 0.56;
+
+    let best = null;
+    const startSize = Math.min(availW * 0.24, availH * 0.44, 158);
+    for (let size = startSize; size >= 12; size -= 1) {
+      ctx.font = fontFor(size);
+      const lines = wrapTokens(tokens, availW);
+      const lineH = size * 1.62;
+      const maxLineW = Math.max(...lines.map((l) => ctx.measureText(l.map((c) => c.ch).join("")).width));
+      best = { size, lines, lineH };
+      if (lines.length * lineH <= availH && maxLineW <= availW) break;
+    }
+
+    const { size, lines, lineH } = best;
+    ctx.font = fontFor(size);
+    const firstCenter = cy - (lines.length * lineH) / 2 + lineH / 2;
+    const { letters, lineInfo } = placeLines(lines, cx, firstCenter, lineH, size, seed);
+
     layoutCache.value = { size, letters, lineInfo, lineH };
     return layoutCache.value;
   }
 
-  /* ── drawing ─────────────────────────────────────────── */
+  /* ── orbits ──────────────────────────────────────────── */
 
-  function drawGlyph(c, letter, t, pal, s, alpha) {
-    const size = letter.size;
-    const phase = hash2(state.seed, letter.idx) * TAU;
-    const tw = 0.82 + 0.18 * Math.sin(t * 1.2 + phase);
-    const y = letter.y;
-    const glow = pal.light ? 0.5 : 1;
-
-    const halo = c.createRadialGradient(letter.x, y, 0, letter.x, y, size * 0.95);
-    halo.addColorStop(0, hexA(pal.accent, 0.17 * glow * alpha * tw));
-    halo.addColorStop(0.55, hexA(pal.accent, 0.05 * glow * alpha));
-    halo.addColorStop(1, hexA(pal.accent, 0));
-    c.fillStyle = halo;
-    c.beginPath();
-    c.arc(letter.x, y, size * 0.95, 0, TAU);
-    c.fill();
-
-    c.save();
-    c.globalAlpha = alpha;
-    c.font = `400 ${size}px ${SERIF}`;
-    c.textAlign = "center";
-    c.textBaseline = "middle";
-    c.fillStyle = pal.ink;
-    c.fillText(letter.ch, letter.x, y);
-    c.restore();
-  }
-
-  /* Orbits are counted for the whole chart: the field below sets exactly how
-     many rings appear, spread across the letters. Each tilt is fully random. */
-  let orbitsCache = { key: "", value: [] };
-
+  /* The chart shows exactly `state.orbits` rings, spread across the letters.
+     Each ring gets its own fully random tilt, size and moon phase. */
   function buildOrbits(layout) {
-    const total = clamp(Math.floor(state.orbits), 0, 200);
+    const total = clamp(Math.floor(state.orbits), 0, MAX_ORBITS);
     if (!layout || !layout.letters.length || total <= 0) return [];
-    const key = `${layoutCache.key}|${state.seed}|${total}`;
-    if (orbitsCache.key === key) return orbitsCache.value;
-    orbitsCache.key = key;
+    if (layout.orbitCount === total) return layout.orbits;
 
     const letters = layout.letters;
     const order = letters
@@ -411,14 +410,41 @@
         size: letter.size,
       });
     }
-    orbitsCache.value = rings;
+
+    layout.orbitCount = total;
+    layout.orbits = rings;
     return rings;
   }
 
+  /* ── drawing ─────────────────────────────────────────── */
+
+  function drawGlyph(c, letter, t, pal, alpha) {
+    const { size } = letter;
+    const phase = hash2(state.seed, letter.idx) * TAU;
+    const twinkle = 0.82 + 0.18 * Math.sin(t * 1.2 + phase);
+    const glow = pal.light ? 0.5 : 1;
+
+    const halo = c.createRadialGradient(letter.x, letter.y, 0, letter.x, letter.y, size * 0.95);
+    halo.addColorStop(0, hexA(pal.accent, 0.17 * glow * alpha * twinkle));
+    halo.addColorStop(0.55, hexA(pal.accent, 0.05 * glow * alpha));
+    halo.addColorStop(1, hexA(pal.accent, 0));
+    c.fillStyle = halo;
+    c.beginPath();
+    c.arc(letter.x, letter.y, size * 0.95, 0, TAU);
+    c.fill();
+
+    c.save();
+    c.globalAlpha = alpha;
+    c.font = fontFor(size);
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.fillStyle = pal.ink;
+    c.fillText(letter.ch, letter.x, letter.y);
+    c.restore();
+  }
+
   function drawOrbit(c, ring, t, pal, s) {
-    const born = state.births[ring.idx];
-    const age = born == null ? 1 : clamp((t - born) / 0.7, 0, 1);
-    const alpha = 1 - Math.pow(1 - age, 3);
+    const alpha = easeOut(ageOf(ring.idx, t, 0.7));
 
     c.save();
     c.translate(ring.x, ring.y);
@@ -437,9 +463,7 @@
     c.restore();
   }
 
-  function drawOrigin(c, w, h, t) {
-    const pal = currentPal();
-    const s = clamp(Math.min(w, h) / 860, 0.62, 1.7);
+  function drawOrigin(c, w, h, t, pal, s) {
     const pulse = 0.6 + 0.4 * Math.sin(t * 1.4);
     c.save();
     c.strokeStyle = hexA(pal.ink, 0.16 * pulse);
@@ -461,8 +485,7 @@
     c.restore();
   }
 
-  function drawPlateCaption(c, w, h) {
-    const pal = currentPal();
+  function drawPlateCaption(c, w, h, pal) {
     const s = clamp(Math.min(w, h) / 900, 0.7, 1.6);
     const pad = 34 * s;
 
@@ -488,9 +511,52 @@
     c.restore();
   }
 
-  function drawScene(c, w, h, t, chrome) {
+  function drawBaselines(c, layout, pal, s) {
+    c.save();
+    c.font = `${8.5 * s}px ${MONO}`;
+    c.textAlign = "right";
+    c.textBaseline = "alphabetic";
+    c.strokeStyle = hexA(pal.ink, 0.12);
+    c.lineWidth = 1;
+
+    for (let i = 0; i < layout.lineInfo.length; i++) {
+      const info = layout.lineInfo[i];
+      const y = info.y + layout.size * 0.24;
+      const left = info.x0 - 10 * s;
+      const right = info.x0 + info.width + 10 * s;
+      c.beginPath();
+      c.moveTo(left, Math.round(y) + 0.5);
+      c.lineTo(right, Math.round(y) + 0.5);
+      c.moveTo(left, y - 4 * s);
+      c.lineTo(left, y + 4 * s);
+      c.moveTo(right, y - 4 * s);
+      c.lineTo(right, y + 4 * s);
+      c.stroke();
+      c.fillStyle = hexA(pal.ink, 0.3);
+      c.fillText(String(i + 1).padStart(2, "0"), Math.max(26, info.x0 - 18 * s), y);
+    }
+    c.restore();
+  }
+
+  function drawConstellations(c, layout, t, pal, s) {
+    c.setLineDash([2 * s, 6 * s]);
+    c.lineWidth = Math.max(0.6, 0.7 * s);
+    for (let i = 1; i < layout.letters.length; i++) {
+      const a = layout.letters[i - 1];
+      const b = layout.letters[i];
+      if (a.line !== b.line || a.word !== b.word) continue;
+      c.strokeStyle = hexA(pal.ink, 0.22 * ageOf(b.idx, t, 0.7));
+      c.beginPath();
+      c.moveTo(a.x, a.y);
+      c.lineTo(b.x, b.y);
+      c.stroke();
+    }
+    c.setLineDash([]);
+  }
+
+  function drawScene(c, w, h, t, plateView) {
     const pal = currentPal();
-    const s = clamp(Math.min(w, h) / 860, 0.62, 1.7);
+    const s = scaleFor(w, h);
 
     ensureBackground(w, h);
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -506,68 +572,26 @@
     }
 
     const layout = buildLayout(state.text, w, h, state.seed);
-
     if (!layout) {
-      drawOrigin(c, w, h, t);
-      if (!chrome) drawPlateCaption(c, w, h);
+      drawOrigin(c, w, h, t, pal, s);
+      if (plateView) drawPlateCaption(c, w, h, pal);
       return;
     }
 
-    // ruled baselines + line index
-    c.save();
-    c.font = `${8.5 * s}px ${MONO}`;
-    c.textAlign = "right";
-    c.textBaseline = "alphabetic";
-    for (let i = 0; i < layout.lineInfo.length; i++) {
-      const info = layout.lineInfo[i];
-      const y = info.y + layout.size * 0.24;
-      c.strokeStyle = hexA(pal.ink, 0.12);
-      c.lineWidth = 1;
-      c.beginPath();
-      c.moveTo(info.x0 - 10 * s, Math.round(y) + 0.5);
-      c.lineTo(info.x0 + info.width + 10 * s, Math.round(y) + 0.5);
-      c.moveTo(info.x0 - 10 * s, y - 4 * s);
-      c.lineTo(info.x0 - 10 * s, y + 4 * s);
-      c.moveTo(info.x0 + info.width + 10 * s, y - 4 * s);
-      c.lineTo(info.x0 + info.width + 10 * s, y + 4 * s);
-      c.stroke();
-      c.fillStyle = hexA(pal.ink, 0.3);
-      c.fillText(String(i + 1).padStart(2, "0"), Math.max(26, info.x0 - 18 * s), y);
-    }
-    c.restore();
+    drawBaselines(c, layout, pal, s);
+    drawConstellations(c, layout, t, pal, s);
 
-    // constellation lines inside each word
-    c.setLineDash([2 * s, 6 * s]);
-    c.lineWidth = Math.max(0.6, 0.7 * s);
-    for (let i = 1; i < layout.letters.length; i++) {
-      const a = layout.letters[i - 1];
-      const b = layout.letters[i];
-      if (a.line !== b.line || a.word !== b.word) continue;
-      const born = state.births[b.idx];
-      const age = born == null ? 1 : clamp((t - born) / 0.7, 0, 1);
-      c.strokeStyle = hexA(pal.ink, 0.22 * age);
-      c.beginPath();
-      c.moveTo(a.x, a.y);
-      c.lineTo(b.x, b.y);
-      c.stroke();
-    }
-    c.setLineDash([]);
-
-    for (const ring of buildOrbits(layout)) {
-      drawOrbit(c, ring, t, pal, s);
-    }
+    for (const ring of buildOrbits(layout)) drawOrbit(c, ring, t, pal, s);
 
     for (const letter of layout.letters) {
-      const born = state.births[letter.idx];
-      const age = born == null ? 1 : clamp((t - born) / 0.55, 0, 1);
-      const alpha = 1 - Math.pow(1 - age, 3);
-      drawGlyph(c, letter, t, pal, s, alpha);
+      const alpha = easeOut(ageOf(letter.idx, t, 0.55));
+      drawGlyph(c, letter, t, pal, alpha);
     }
 
-    if (!chrome) drawPlateCaption(c, w, h);
+    if (plateView) drawPlateCaption(c, w, h, pal);
   }
 
-  /* ── loop ────────────────────────────────────────────── */
+  /* ── frame loop ──────────────────────────────────────── */
 
   function resize() {
     dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -584,13 +608,13 @@
   function loop(now) {
     const t = reduceMotion ? 1.4 : now / 1000;
     state.t = t;
-    drawScene(ctx, W, H, t, !state.plate);
+    drawScene(ctx, W, H, t, state.plate);
     requestAnimationFrame(loop);
   }
 
-  /* ── editing ─────────────────────────────────────────── */
+  /* ── chart state ─────────────────────────────────────── */
 
-  function sync() {
+  function syncReadout() {
     const letters = state.text.replace(/\s/g, "").length;
     const words = state.text.trim() ? state.text.trim().split(/\s+/).length : 0;
 
@@ -601,20 +625,21 @@
   }
 
   function addChar(ch) {
-    const limit = W < 620 ? 70 : MAX_CHARS;
+    const limit = W < 620 ? MAX_CHARS_NARROW : MAX_CHARS;
     if (state.text.length >= limit) return;
 
     if (/\s/.test(ch)) {
       if (!state.text.length || state.text.endsWith(" ")) return;
       state.text += " ";
       state.births.push(state.t);
-      sync();
+      syncReadout();
       return;
     }
+
     state.text += ch;
     state.births.push(state.t);
     layoutCache.key = "";
-    sync();
+    syncReadout();
   }
 
   function pop() {
@@ -622,15 +647,17 @@
     state.text = state.text.slice(0, -1);
     state.births.pop();
     layoutCache.key = "";
-    sync();
+    syncReadout();
   }
 
   function clearSky() {
     state.text = "";
     state.births = [];
     layoutCache.key = "";
-    sync();
+    syncReadout();
   }
+
+  /* ── colours ─────────────────────────────────────────── */
 
   function applyTheme(pal) {
     const root = document.documentElement.style;
@@ -657,7 +684,7 @@
     applyTheme(pal);
     syncSwatches();
     bgKey = "";
-    sync();
+    syncReadout();
   }
 
   function setCustomColors(bg, ink) {
@@ -667,9 +694,11 @@
     bgKey = "";
   }
 
-  function readCustomColors() {
+  function applyPickerColors() {
     setCustomColors(els.bgPick.value, els.inkPick.value);
   }
+
+  /* ── controls ────────────────────────────────────────── */
 
   function setFilter(key) {
     if (!FILTERS[key]) return;
@@ -679,7 +708,7 @@
   }
 
   function setOrbits(n) {
-    const value = clamp(Math.floor(Number(n) || 0), 0, 200);
+    const value = clamp(Math.floor(Number(n) || 0), 0, MAX_ORBITS);
     state.orbits = value;
     els.orbits.value = String(value);
   }
@@ -696,9 +725,8 @@
     buildSky();
     bgKey = "";
     layoutCache.key = "";
-    orbitsCache.key = "";
-    setOrbits(Math.floor(Math.random() * 13));
-    sync();
+    setOrbits(randomOrbitCount());
+    syncReadout();
   }
 
   function savePNG() {
@@ -710,10 +738,10 @@
     buffer.width = out.width;
     buffer.height = out.height;
 
-    const previous = dpr;
+    const previousDpr = dpr;
     dpr = scale;
-    drawScene(buffer.getContext("2d"), W, H, state.t, false);
-    dpr = previous;
+    drawScene(buffer.getContext("2d"), W, H, state.t, true);
+    dpr = previousDpr;
     bgKey = "";
 
     const c = out.getContext("2d");
@@ -730,7 +758,7 @@
     }, "image/png");
   }
 
-  /* ── palette buttons ─────────────────────────────────── */
+  /* ── wiring ──────────────────────────────────────────── */
 
   for (const [key, pal] of Object.entries(PALETTES)) {
     const btn = document.createElement("button");
@@ -745,11 +773,11 @@
     els.palettes.appendChild(btn);
   }
 
-  /* ── input ───────────────────────────────────────────── */
+  const isFormField = (el) =>
+    el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement;
 
   window.addEventListener("keydown", (e) => {
-    if (e.target instanceof HTMLInputElement && e.target !== typer) return;
-    if (e.target instanceof HTMLSelectElement) return;
+    if (e.target !== typer && isFormField(e.target)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     if (e.key === "Backspace") {
@@ -789,21 +817,21 @@
   els.plate.addEventListener("click", () => setPlate(true));
   els.save.addEventListener("click", savePNG);
   els.newSky.addEventListener("click", newSky);
-  els.bgPick.addEventListener("input", readCustomColors);
-  els.inkPick.addEventListener("input", readCustomColors);
+  els.bgPick.addEventListener("input", applyPickerColors);
+  els.inkPick.addEventListener("input", applyPickerColors);
   els.filter.addEventListener("change", () => setFilter(els.filter.value));
-  els.orbits.addEventListener("input", () => setOrbits(els.orbits.value));
-  els.orbits.addEventListener("change", () => setOrbits(els.orbits.value));
+  for (const type of ["input", "change"]) {
+    els.orbits.addEventListener(type, () => setOrbits(els.orbits.value));
+  }
   window.addEventListener("resize", resize);
 
   /* ── boot ────────────────────────────────────────────── */
 
   resize();
   buildSky();
-  setPalette("nebula");
-  setFilter("none");
-  setOrbits(1);
-  sync();
+  setPalette(state.paletteKey);
+  setFilter(state.filter);
+  setOrbits(state.orbits);
 
   const welcome = "type orbit";
   welcome.split("").forEach((ch, i) => {
