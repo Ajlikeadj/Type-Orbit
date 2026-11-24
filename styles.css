@@ -82,7 +82,6 @@ header > * { pointer-events: auto; }
   opacity: .42;
 }
 
-
 .credit {
   display: inline-block;
   margin-top: 10px;
@@ -140,8 +139,8 @@ header > * { pointer-events: auto; }
 .mode button:focus-visible,
 .swatch:focus-visible,
 .tint input:focus-visible,
-.filter select:focus-visible,
-.filter input.num:focus-visible,
+.field select:focus-visible,
+.field input.num:focus-visible,
 .actions button:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 3px;
@@ -221,13 +220,14 @@ footer {
   gap: 10px;
 }
 
-.palettes .label {
-  margin-right: 6px;
+.controls .label {
   font-size: 8.5px;
   letter-spacing: .26em;
   text-transform: uppercase;
   opacity: .35;
 }
+
+.palettes .label { margin-right: 6px; }
 
 .swatch {
   position: relative;
@@ -248,20 +248,14 @@ footer {
 }
 
 .tints,
-.filter {
+.field {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .tints .label,
-.filter .label {
-  margin-right: 2px;
-  font-size: 8.5px;
-  letter-spacing: .26em;
-  text-transform: uppercase;
-  opacity: .35;
-}
+.field .label { margin-right: 2px; }
 
 .tint {
   display: flex;
@@ -293,7 +287,7 @@ footer {
 .tint input::-webkit-color-swatch { border: 0; }
 .tint input::-moz-color-swatch { border: 0; }
 
-.filter select {
+.field select {
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--hair);
@@ -315,11 +309,11 @@ footer {
   transition: border-color .2s ease;
 }
 
-.filter select:hover { border-color: color-mix(in srgb, var(--ink) 32%, transparent); }
+.field select:hover { border-color: color-mix(in srgb, var(--ink) 32%, transparent); }
 
-.filter select option { color: #111; background: #fff; }
+.field select option { color: #111; background: #fff; }
 
-.filter input.num {
+.field input.num {
   appearance: none;
   -webkit-appearance: none;
   width: 58px;
@@ -335,10 +329,10 @@ footer {
   transition: border-color .2s ease;
 }
 
-.filter input.num:hover { border-color: color-mix(in srgb, var(--ink) 32%, transparent); }
+.field input.num:hover { border-color: color-mix(in srgb, var(--ink) 32%, transparent); }
 
-.filter input.num::-webkit-outer-spin-button,
-.filter input.num::-webkit-inner-spin-button {
+.field input.num::-webkit-outer-spin-button,
+.field input.num::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
@@ -426,15 +420,13 @@ body.plate .plate-hint { opacity: .3; }
   footer { padding: 12px 18px; gap: 10px 14px; }
   .controls { gap: 8px 14px; }
   .palettes { gap: 6px; }
-  .palettes .label,
-  .tints .label,
-  .filter .label { display: none; }
+  .controls .label { display: none; }
   .swatch { width: 16px; height: 16px; }
   .tint { gap: 0; }
   .tint span { display: none; }
   .tint input { width: 18px; height: 18px; }
-  .filter select { font-size: 8.5px; letter-spacing: .1em; padding: 6px 19px 6px 7px; }
-  .filter input.num { width: 46px; font-size: 8.5px; padding: 6px 3px; }
+  .field select { font-size: 8.5px; letter-spacing: .1em; padding: 6px 19px 6px 7px; }
+  .field input.num { width: 46px; font-size: 8.5px; padding: 6px 3px; }
   .caption {
     left: 18px;
     right: 18px;
